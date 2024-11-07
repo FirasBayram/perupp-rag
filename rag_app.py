@@ -82,7 +82,7 @@ def main():
             index, texts = load_index_and_texts()
 
             # Generate the embedding for the user's query (which is the travel plan prompt)
-            response = OpenAI(api_key=openai_api_key).embeddings.create(input=[normal_prompt], model="text-embedding-3-large")
+            response = OpenAI(api_key=openai_api_key).embeddings.create(input=[normal_prompt], model="text-embedding-ada-002")
             query_embedding = np.array(response.data[0].embedding)
 
             # Search the FAISS index for relevant documents
