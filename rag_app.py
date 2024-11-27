@@ -62,7 +62,11 @@ def main():
     point_of_departure = st.text_input("Point of Departure")
 
     st.header("Area of Interest")
-    area_of_interest = st.selectbox("Choose an Area of Interest", ["Literature", "Science and Engineering", "Design and Art"])
+    area_of_interest = st.multiselect(
+        "Choose Areas of Interest",
+        ["Literature", "Science and Engineering", "Design and Art", "Nature"],
+        default=["Literature"]  # Set default interests if necessary
+    )
 
     # Step 2: Enter OpenAI API key
     openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
@@ -75,7 +79,7 @@ def main():
                 f"The user is {age} years old and identifies as {gender}. They reside in {city_residence}, "
                 f"{country_residence} and plan to visit for {days_for_visit} days using {transportation}. "
                 f"They will be traveling with {num_people} adults and {num_children} children under 10, "
-                f"departing from {point_of_departure}. Their area of interest is {area_of_interest}."
+                f"departing from {point_of_departure}. Their areas of interest are {', '.join(area_of_interest)}."
             )
 
             # Load FAISS index and texts
