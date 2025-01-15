@@ -17,14 +17,12 @@ def create_embedding(text, client):
         
         response = client.embeddings.create(
             input=[text],
-            model="text-embedding-ada-002"  # Use the same model that was used to create the index
+            model="text-embedding-ada-002"
         )
         embedding = np.array(response.data[0].embedding)
-        st.write(f"Created embedding with shape: {embedding.shape}")
         return embedding
     except Exception as e:
         st.error(f"Error creating embedding: {str(e)}")
-        logging.error(f"Detailed error in create_embedding: {str(e)}")  # Additional logging
         return None
 
 def call_openai_api(prompt, context, client):
@@ -50,16 +48,9 @@ def call_openai_api(prompt, context, client):
 def load_index_and_texts(index_file="faiss_index_batch-3-LARGE.bin", text_file="texts.pkl"):
     """Load FAISS index and associated text data."""
     try:
-        st.write(f"Attempting to load index from: {index_file}")
-        st.write(f"Attempting to load texts from: {text_file}")
-        
         index = faiss.read_index(index_file)
-        st.write(f"FAISS index loaded successfully. Dimension: {index.d}")
-        
         with open(text_file, "rb") as f:
             texts = pickle.load(f)
-        st.write(f"Texts loaded successfully. Number of texts: {len(texts)}")
-        
         return index, texts
     except FileNotFoundError as e:
         st.error(f"File not found: {str(e)}")
@@ -71,18 +62,11 @@ def load_index_and_texts(index_file="faiss_index_batch-3-LARGE.bin", text_file="
 def search_index(index, query_embedding, k=5):
     """Search for the top k closest matches in the FAISS index."""
     try:
-        # Log the shapes for debugging
-        st.write(f"Index dimension: {index.d}")
-        st.write(f"Query embedding shape: {query_embedding.shape}")
-        
-        # Ensure query_embedding is properly shaped
         query_embedding = query_embedding.reshape(1, -1)
-        st.write(f"Reshaped query embedding: {query_embedding.shape}")
-        
         distances, indices = index.search(query_embedding, k)
         return distances, indices
     except Exception as e:
-        st.error(f"Error searching index: {str(e)}\nQuery shape: {query_embedding.shape}")
+        st.error(f"Error searching index: {str(e)}")
         return None, None
 
 # Get list of countries
