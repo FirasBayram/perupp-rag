@@ -14,7 +14,7 @@ def create_embedding(text, client):
     try:
         response = client.embeddings.create(
             input=[text],
-            model="text-embedding-3-large"
+            model="text-embedding-ada-002"  # Use the same model that was used to create the index
         )
         embedding = np.array(response.data[0].embedding)
         st.write(f"Created embedding with shape: {embedding.shape}")
