@@ -122,9 +122,8 @@ def main():
             return
 
         try:
-            # Initialize OpenAI client
-            client = OpenAI()
-            client.api_key = openai_api_key
+            # Initialize OpenAI client with the provided API key
+            client = OpenAI(api_key=openai_api_key)
             
             # Create the prompt
             normal_prompt = (
