@@ -13,10 +13,11 @@ logging.basicConfig(level=logging.INFO)
 def create_embedding(text, api_key):
     """Create embeddings using OpenAI API."""
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI()
+        client.api_key = api_key
         response = client.embeddings.create(
             input=[text],
-            model="text-embedding-3-large"
+            model="text-embedding-ada-002"  # Using a more stable model
         )
         return np.array(response.data[0].embedding)
     except Exception as e:
