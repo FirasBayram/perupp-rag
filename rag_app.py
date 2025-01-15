@@ -13,11 +13,11 @@ logging.basicConfig(level=logging.INFO)
 def create_embedding(text, api_key):
     """Create embeddings using OpenAI API."""
     try:
+        os.environ["OPENAI_API_KEY"] = api_key
         client = OpenAI()
-        client.api_key = api_key
         response = client.embeddings.create(
             input=[text],
-            model="text-embedding-ada-002"  # Using a more stable model
+            model="text-embedding-3-large"
         )
         return np.array(response.data[0].embedding)
     except Exception as e:
@@ -27,7 +27,8 @@ def create_embedding(text, api_key):
 def call_openai_api(prompt, context, api_key):
     """Send the prompt to OpenAI API using GPT-4 and return the response."""
     try:
-        client = OpenAI(api_key=api_key)
+        os.environ["OPENAI_API_KEY"] = api_key
+        client = OpenAI()
         full_prompt = f"Context: {context}\n\nUser Query: {prompt}\n\nBased on the context and user query, provide a detailed travel plan:"
         response = client.chat.completions.create(
             model="gpt-4",
