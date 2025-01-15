@@ -12,6 +12,9 @@ logging.basicConfig(level=logging.INFO)
 def create_embedding(text, client):
     """Create embeddings using OpenAI API."""
     try:
+        # Ensure text is properly encoded
+        text = text.encode('utf-8', errors='ignore').decode('utf-8')
+        
         response = client.embeddings.create(
             input=[text],
             model="text-embedding-ada-002"  # Use the same model that was used to create the index
@@ -21,6 +24,7 @@ def create_embedding(text, client):
         return embedding
     except Exception as e:
         st.error(f"Error creating embedding: {str(e)}")
+        logging.error(f"Detailed error in create_embedding: {str(e)}")  # Additional logging
         return None
 
 def call_openai_api(prompt, context, client):
@@ -126,13 +130,14 @@ def main():
             client = OpenAI(api_key=openai_api_key)
             
             # Create the prompt
+            # Create the prompt with explicit encoding
             normal_prompt = (
-                f"Please suggest a travel plan based in Värmland based on the following details: "
+                f"Please suggest a travel plan based in Varmland based on the following details: "
                 f"The user is {age} years old and identifies as {gender}. They reside in {city_residence}, "
                 f"{country_residence} and plan to visit for {days_for_visit} days using {transportation}. "
                 f"They will be traveling with {num_people} adults and {num_children} children under 10, "
                 f"departing from {point_of_departure}. Their areas of interest are {', '.join(area_of_interest)}."
-            )
+            ).encode('utf-8', errors='ignore').decode('utf-8')
 
             with st.spinner('Loading knowledge base...'):
                 # Load FAISS index and texts
