@@ -4,76 +4,105 @@ import faiss
 import numpy as np
 import pickle
 import logging
+import os
 from openai import OpenAI
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Set up OpenAI API client (will be passed later)
-def call_openai_api(prompt, context, api_key):
-    """Send the prompt to OpenAI API using the fine-tuned model and return the response."""
-    client = OpenAI(api_key=api_key)
+def create_embedding(text, client):
+    """Create embeddings using OpenAI API."""
     try:
-        # Combine the context with the prompt before sending it to OpenAI
-        full_prompt = f"Context: {context}\n\n{prompt}"
+        response = client.embeddings.create(
+            input=[text],
+            model="text-embedding-3-large"
+        )
+        return np.array(response.data[0].embedding)
+    except Exception as e:
+        st.error(f"Error creating embedding: {str(e)}")
+        return None
+
+def call_openai_api(prompt, context, client):
+    """Send the prompt to OpenAI API using GPT-4 and return the response."""
+    try:
+        full_prompt = f"Context: {context}\n\nUser Query: {prompt}\n\nBased on the context and user query, provide a detailed travel plan:"
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": full_prompt}]
+            messages=[{"role": "user", "content": full_prompt}],
+            temperature=0.7,
+            max_tokens=1500
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"An error occurred: {e}"
+        st.error(f"Error calling OpenAI API: {str(e)}")
+        return None
 
-# FAISS Retrieval Functions
 def load_index_and_texts(index_file="faiss_index_batch-3-LARGE.bin", text_file="texts.pkl"):
     """Load FAISS index and associated text data."""
-    index = faiss.read_index(index_file)
-    with open(text_file, "rb") as f:
-        texts = pickle.load(f)
-    return index, texts
+    try:
+        index = faiss.read_index(index_file)
+        with open(text_file, "rb") as f:
+            texts = pickle.load(f)
+        return index, texts
+    except Exception as e:
+        st.error(f"Error loading index and texts: {str(e)}")
+        return None, None
 
 def search_index(index, query_embedding, k=5):
     """Search for the top k closest matches in the FAISS index."""
-    distances, indices = index.search(query_embedding.reshape(1, -1), k)
-    return distances, indices
+    try:
+        distances, indices = index.search(query_embedding.reshape(1, -1), k)
+        return distances, indices
+    except Exception as e:
+        st.error(f"Error searching index: {str(e)}")
+        return None, None
 
-# Get list of countries (use pycountry library)
+# Get list of countries
 countries = [country.name for country in pycountry.countries]
 
-# Streamlit app content
 def main():
     st.title("Travel Planning App with RAG")
 
-    # Step 1: Collect user information and travel preferences
+    # User Information
     st.header("User Information")
-    age = st.number_input("Age", min_value=1, max_value=120, step=1)
+    age = st.number_input("Age", min_value=1, max_value=120, value=30, step=1)
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-
     country_residence = st.selectbox("Country of Residence", countries)
     city_residence = st.text_input("City of Residence")
 
+    # Situational Data
     st.header("Situational Data")
-    days_for_visit = st.number_input("# of Days for Visit", min_value=1, step=1)
+    days_for_visit = st.number_input("# of Days for Visit", min_value=1, value=3, step=1)
     transportation = st.selectbox("Type of Transportation", ["Own Car", "Public Transport"])
 
+    # Travel Constellation
     st.subheader("Traveling Constellation")
-    num_people = st.number_input("# of People", min_value=1, step=1)
-    num_children = st.number_input("# of Children under 10?", min_value=0, step=1)
+    num_people = st.number_input("# of People", min_value=1, value=1, step=1)
+    num_children = st.number_input("# of Children under 10?", min_value=0, value=0, step=1)
     point_of_departure = st.text_input("Point of Departure")
 
+    # Area of Interest
     st.header("Area of Interest")
     area_of_interest = st.multiselect(
         "Choose Areas of Interest",
         ["Literature", "Science and Engineering", "Design and Art", "Nature"],
-        default=["Literature"]  # Set default interests if necessary
+        default=["Literature"]
     )
 
-    # Step 2: Enter OpenAI API key
+    # OpenAI API Key
     openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
 
-    # Step 3: Generate travel plan only after "Generate Travel Plan" button is pressed
-    if openai_api_key:
-        if st.button("Generate Travel Plan"):
+    if openai_api_key and st.button("Generate Travel Plan"):
+        if not city_residence or not point_of_departure:
+            st.error("Please fill in all required fields.")
+            return
+
+        try:
+            # Initialize OpenAI client
+            os.environ["OPENAI_API_KEY"] = openai_api_key
+            client = OpenAI()
+
+            # Create the prompt
             normal_prompt = (
                 f"Please suggest a travel plan based in Värmland based on the following details: "
                 f"The user is {age} years old and identifies as {gender}. They reside in {city_residence}, "
@@ -82,40 +111,49 @@ def main():
                 f"departing from {point_of_departure}. Their areas of interest are {', '.join(area_of_interest)}."
             )
 
-            # Load FAISS index and texts
-            index, texts = load_index_and_texts()
+            with st.spinner('Loading knowledge base...'):
+                # Load FAISS index and texts
+                index, texts = load_index_and_texts()
+                if index is None or texts is None:
+                    st.error("Failed to load knowledge base.")
+                    return
 
-            # Generate the embedding for the user's query (which is the travel plan prompt)
-            response = OpenAI(api_key=openai_api_key).embeddings.create(input=[normal_prompt], model="text-embedding-ada-002")
-            query_embedding = np.array(response.data[0].embedding)
+                # Generate embedding for the query
+                query_embedding = create_embedding(normal_prompt, client)
+                if query_embedding is None:
+                    st.error("Failed to create embedding.")
+                    return
 
-            # Search the FAISS index for relevant documents
-            distances, indices = search_index(index, query_embedding)
+                # Search for relevant context
+                distances, indices = search_index(index, query_embedding)
+                if distances is None or indices is None:
+                    st.error("Failed to search knowledge base.")
+                    return
 
-            # Get the most relevant texts based on the search
-            retrieved_texts = []
-            for i in range(len(indices[0])):
-                idx = indices[0][i]
-                if 0 <= idx < len(texts):
-                    retrieved_texts.append(texts[idx])
+                # Get relevant texts
+                retrieved_texts = [texts[idx] for idx in indices[0] if 0 <= idx < len(texts)]
+                combined_context = " ".join(retrieved_texts[:4])
 
-            # Combine the retrieved texts as context
-            combined_context = " ".join(retrieved_texts[:4])  # Limit context to top 4 relevant texts
+            # Display prompt and context
+            with st.expander("Show Generated Prompt and Context"):
+                st.write("### Prompt")
+                st.write(normal_prompt)
+                st.write("### Retrieved Context")
+                st.write(combined_context)
 
-            # Display the generated prompt and context
-            st.write("### Generated Prompt and Context for LLM")
-            st.write(f"Prompt: {normal_prompt}")
-            st.write(f"Context: {combined_context}")
-
-            # Display spinner while waiting for the response
+            # Generate travel plan
             with st.spinner('Generating your travel plan...'):
-                # Send the normal prompt along with the context to OpenAI's API
-                response = call_openai_api(normal_prompt, combined_context, openai_api_key)
+                response = call_openai_api(normal_prompt, combined_context, client)
+                if response:
+                    st.write("### Your Travel Plan")
+                    st.markdown(response)
 
-            # Display the result after the spinner ends
-            st.write("### Travel Plan Response from LLM")
-            st.write(response)
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+        finally:
+            # Clean up
+            if "OPENAI_API_KEY" in os.environ:
+                del os.environ["OPENAI_API_KEY"]
 
-# Run the app
 if __name__ == '__main__':
     main()
