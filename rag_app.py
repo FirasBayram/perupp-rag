@@ -4,17 +4,14 @@ import faiss
 import numpy as np
 import pickle
 import logging
-import os
 from openai import OpenAI
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def create_embedding(text, api_key):
+def create_embedding(text, client):
     """Create embeddings using OpenAI API."""
     try:
-        os.environ["OPENAI_API_KEY"] = api_key
-        client = OpenAI()
         response = client.embeddings.create(
             input=[text],
             model="text-embedding-3-large"
@@ -24,19 +21,22 @@ def create_embedding(text, api_key):
         st.error(f"Error creating embedding: {str(e)}")
         return None
 
-def call_openai_api(prompt, context, api_key):
+def call_openai_api(prompt, context, client):
     """Send the prompt to OpenAI API using GPT-4 and return the response."""
     try:
-        os.environ["OPENAI_API_KEY"] = api_key
-        client = OpenAI()
-        full_prompt = f"Context: {context}\n\nUser Query: {prompt}\n\nBased on the context and user query, provide a detailed travel plan:"
+        messages = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": f"Context: {context}"},
+        ]
+        
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": full_prompt}],
-            temperature=0.7,
-            max_tokens=1500
+            messages=messages,
+            max_tokens=2500,
+            n=1,
+            temperature=0.7
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI API: {str(e)}")
         return None
@@ -102,6 +102,9 @@ def main():
             return
 
         try:
+            # Initialize OpenAI client
+            client = OpenAI(api_key=openai_api_key)
+            
             # Create the prompt
             normal_prompt = (
                 f"Please suggest a travel plan based in Värmland based on the following details: "
@@ -119,7 +122,7 @@ def main():
                     return
 
                 # Generate embedding for the query
-                query_embedding = create_embedding(normal_prompt, openai_api_key)
+                query_embedding = create_embedding(normal_prompt, client)
                 if query_embedding is None:
                     st.error("Failed to create embedding.")
                     return
@@ -130,8 +133,19 @@ def main():
                     st.error("Failed to search knowledge base.")
                     return
 
-                # Get relevant texts
-                retrieved_texts = [texts[idx] for idx in indices[0] if 0 <= idx < len(texts)]
+                # Get relevant texts with similarity threshold
+                similarity_threshold = 1.5
+                retrieved_texts = []
+                for i in range(len(indices[0])):
+                    if distances[0][i] < similarity_threshold:
+                        idx = indices[0][i]
+                        if 0 <= idx < len(texts):
+                            retrieved_texts.append(texts[idx])
+
+                # Fallback if no matches found
+                if not retrieved_texts:
+                    retrieved_texts = ["No specific events found. Here are general recommendations for Värmland."]
+
                 combined_context = " ".join(retrieved_texts[:4])
 
             # Display prompt and context
@@ -143,7 +157,7 @@ def main():
 
             # Generate travel plan
             with st.spinner('Generating your travel plan...'):
-                response = call_openai_api(normal_prompt, combined_context, openai_api_key)
+                response = call_openai_api(normal_prompt, combined_context, client)
                 if response:
                     st.write("### Your Travel Plan")
                     st.markdown(response)
