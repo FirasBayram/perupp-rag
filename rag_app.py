@@ -10,9 +10,10 @@ from openai import OpenAI
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def create_embedding(text, client):
+def create_embedding(text, api_key):
     """Create embeddings using OpenAI API."""
     try:
+        client = OpenAI(api_key=api_key)
         response = client.embeddings.create(
             input=[text],
             model="text-embedding-3-large"
@@ -22,9 +23,10 @@ def create_embedding(text, client):
         st.error(f"Error creating embedding: {str(e)}")
         return None
 
-def call_openai_api(prompt, context, client):
+def call_openai_api(prompt, context, api_key):
     """Send the prompt to OpenAI API using GPT-4 and return the response."""
     try:
+        client = OpenAI(api_key=api_key)
         full_prompt = f"Context: {context}\n\nUser Query: {prompt}\n\nBased on the context and user query, provide a detailed travel plan:"
         response = client.chat.completions.create(
             model="gpt-4",
@@ -98,10 +100,6 @@ def main():
             return
 
         try:
-            # Initialize OpenAI client
-            os.environ["OPENAI_API_KEY"] = openai_api_key
-            client = OpenAI()
-
             # Create the prompt
             normal_prompt = (
                 f"Please suggest a travel plan based in Värmland based on the following details: "
@@ -119,7 +117,7 @@ def main():
                     return
 
                 # Generate embedding for the query
-                query_embedding = create_embedding(normal_prompt, client)
+                query_embedding = create_embedding(normal_prompt, openai_api_key)
                 if query_embedding is None:
                     st.error("Failed to create embedding.")
                     return
@@ -143,17 +141,13 @@ def main():
 
             # Generate travel plan
             with st.spinner('Generating your travel plan...'):
-                response = call_openai_api(normal_prompt, combined_context, client)
+                response = call_openai_api(normal_prompt, combined_context, openai_api_key)
                 if response:
                     st.write("### Your Travel Plan")
                     st.markdown(response)
 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
-        finally:
-            # Clean up
-            if "OPENAI_API_KEY" in os.environ:
-                del os.environ["OPENAI_API_KEY"]
 
 if __name__ == '__main__':
     main()
